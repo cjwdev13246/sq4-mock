@@ -1,0 +1,38 @@
+name: Sync benzingaEarningSQ4
+
+on:
+  schedule:
+    - cron: "0 23 * * *" # 매일 08:00 KST (23:00 UTC)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download JSON from CDN
+        run: |
+          curl -fsSL --retry 3 --max-time 60 \
+            https://werkjrjmoxrq22227357.cdn.ntruss.com/json/benzingaEarningSQ4.json \
+            -o /tmp/sq4.json
+          # 빈 배열이나 잘못된 JSON이면 교체하지 않고 실패 처리
+          count=$(jq 'if type == "array" then length else error("not an array") end' /tmp/sq4.json)
+          echo "records: $count"
+          test "$count" -gt 0
+          cp /tmp/sq4.json benzingaEarningSQ4_stock.json
+
+      - name: Commit and push if changed
+        run: |
+          if git diff --quiet -- benzingaEarningSQ4_stock.json; then
+            echo "No changes"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add benzingaEarningSQ4_stock.json
+          git commit -m "Sync benzingaEarningSQ4_stock.json from CDN ($(TZ=Asia/Seoul date +%F))"
+          git push
